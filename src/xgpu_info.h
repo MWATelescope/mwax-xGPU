@@ -9,19 +9,19 @@
 #endif
 
 #ifndef NSTATION
-#define NSTATION 256
+#define NSTATION 128
 #endif
 
 #ifndef NFREQUENCY
-#define NFREQUENCY 10
+#define NFREQUENCY 10240
 #endif
 
 #ifndef NTIME
-#define NTIME 1024
+#define NTIME 28
 #endif
 
 #ifndef NTIME_PIPE
-#define NTIME_PIPE 128
+#define NTIME_PIPE 28
 #endif
 
 // Ensure that NTIME_PIPE is a multiple of 4

@@ -11,7 +11,7 @@ endif
 
 DEBUG ?= -O3
 TEXTURE_DIM ?= 1
-CUDA_ARCH ?= sm_30
+CUDA_ARCH ?= sm_37
 
 NVCC = $(CUDA_DIR)/bin/nvcc
 prefix ?= /usr/local
