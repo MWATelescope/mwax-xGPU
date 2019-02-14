@@ -582,21 +582,21 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
 
   // Need to fill pipeline before loop
   long long unsigned int vecLengthPipe = compiletime_info.vecLengthPipe;
-
-///////////////////////////////////////////////////////////////////////////////////////////
-// MWA mods: assumes input data already written to array_d[0] before xgpuCudaXengine() call
-//           so transfer of input data can be skipped
-//           Also assumes NPIPE=1 so ALL data goes into array_d[0]
-///////////////////////////////////////////////////////////////////////////////////////////
-  // ComplexInput *array_hp = context->array_h + context->input_offset;
+  ComplexInput *array_hp = context->array_h + context->input_offset;
 
   // Only start the transfer once the kernel has completed processing input
   // buffer 0.  This is a no-op unless previous call to xgpuCudaXengine() had
   // SYNCOP_NONE or SYNCOP_SYNC_TRANSFER.
   cudaStreamWaitEvent(streams[0], kernelCompletion[0], 0);
-#if 0
-  CUBE_ASYNC_COPY_CALL(array_d[0], array_hp, vecLengthPipe*sizeof(ComplexInput), cudaMemcpyHostToDevice, streams[0]);
-  cudaEventRecord(copyCompletion[0], streams[0]); // record the completion of the h2d transfer
+
+///////////////////////////////////////////////////////////////////////////////////////////
+// MWA mods: assumes input data already written to array_d[0] before xgpuCudaXengine() call
+//           so transfer of input data can be skipped.  Also assumes PIPE_LENGTH=1 so ALL
+//           data goes into array_d[0] and the pipeline loop is skipped
+///////////////////////////////////////////////////////////////////////////////////////////	
+	
+  // CUBE_ASYNC_COPY_CALL(array_d[0], array_hp, vecLengthPipe*sizeof(ComplexInput), cudaMemcpyHostToDevice, streams[0]);
+  // cudaEventRecord(copyCompletion[0], streams[0]); // record the completion of the h2d transfer
   checkCudaError();
 
   CUBE_ASYNC_START(PIPELINE_LOOP);
@@ -638,7 +638,6 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
   }
 
   CUBE_ASYNC_END(PIPELINE_LOOP);
-#endif
 
   array_compute = array_d[(PIPE_LENGTH+1)%2];
   // Final kernel calculation
