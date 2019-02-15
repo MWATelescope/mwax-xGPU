@@ -22,7 +22,7 @@
 // whether we are writing the matrix back to device memory (used for benchmarking)
 static int writeMatrix = 1;
 // this must be enabled for this option to work though, slightly hurts performance
-//#define WRITE_OPTION 
+//#define WRITE_OPTION
 
 // System page size (used for rounding size passed to cudaHostRegister)
 static long page_size = sysconf(_SC_PAGE_SIZE);
@@ -241,12 +241,18 @@ int xgpuInit(XGPUContext *context, int device_flags)
 	  xgpuSetHostOutputBuffer(context);
   }
 
+  ///////////////////////////////////////////////////////////////////////////////////////////
+  // MWA mods: Swap allocation of array_d[0] and array_d[1] so that they are contiguous in
+  //           memory when allocating from high to low addresses.
+  //           Not absolutely guaranteed to be contiguous, so check before using.
+  ///////////////////////////////////////////////////////////////////////////////////////////
+
   //allocate memory on device
-  cudaMalloc((void **) &(internal->array_d[0]), vecLengthPipe*sizeof(ComplexInput));
   cudaMalloc((void **) &(internal->array_d[1]), vecLengthPipe*sizeof(ComplexInput));
+  cudaMalloc((void **) &(internal->array_d[0]), vecLengthPipe*sizeof(ComplexInput));
   cudaMalloc((void **) &(internal->matrix_d), matLength*sizeof(Complex));
   checkCudaError();
-  
+
   //clear out any previous values
   cudaMemset(internal->array_d[0], '\0', vecLengthPipe*sizeof(ComplexInput));
   cudaMemset(internal->array_d[1], '\0', vecLengthPipe*sizeof(ComplexInput));
@@ -288,11 +294,11 @@ int xgpuInit(XGPUContext *context, int device_flags)
 
   // check symbols are copied over
   unsigned char timeIndex2[PIPE_LENGTH*NFREQUENCY];
-  cudaMemcpyFromSymbol(timeIndex2[t], tIndex[t], PIPE_LENGTH*NFREQUENCY*sizeof(unsigned char), cudaMemcpyDeviceToHost);  
+  cudaMemcpyFromSymbol(timeIndex2[t], tIndex[t], PIPE_LENGTH*NFREQUENCY*sizeof(unsigned char), cudaMemcpyDeviceToHost);
   for (int tf=0; tf<PIPE_LENGTH*NFREQUENCY; tf++) {
-    for (int f=0; f<NFREQUENCY; f++) 
-      if (timeIndex[t][f] != timeIndex2[t][f]) 
-	fprintf(stderr, "Index copy failed: t = %d, f = %d, original = %d, copy = %d\n", 
+    for (int f=0; f<NFREQUENCY; f++)
+      if (timeIndex[t][f] != timeIndex2[t][f])
+	fprintf(stderr, "Index copy failed: t = %d, f = %d, original = %d, copy = %d\n",
 	       t, f, timeIndex[t][f], timeIndex2[t][f]);
   }
 #endif
@@ -325,7 +331,7 @@ int xgpuInit(XGPUContext *context, int device_flags)
     return XGPU_INSUFFICIENT_TEXTURE_MEMORY;
   }
 #endif
-#endif 
+#endif
 
   return XGPU_OK;
 }
@@ -572,7 +578,7 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
 
   int Nblock = compiletime_info.nstation/min(TILE_HEIGHT,TILE_WIDTH);
   ComplexInput *array_load;
-  ComplexInput *array_compute; 
+  ComplexInput *array_compute;
 
   dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT,1);
   //allocated exactly as many thread blocks as are needed
@@ -590,13 +596,14 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
   cudaStreamWaitEvent(streams[0], kernelCompletion[0], 0);
 
 ///////////////////////////////////////////////////////////////////////////////////////////
-// MWA mods: assumes input data already written to array_d[0] before xgpuCudaXengine() call
-//           so transfer of input data can be skipped.  Also assumes PIPE_LENGTH=1 so ALL
-//           data goes into array_d[0] and the pipeline loop is skipped
-///////////////////////////////////////////////////////////////////////////////////////////	
-	
-  // CUBE_ASYNC_COPY_CALL(array_d[0], array_hp, vecLengthPipe*sizeof(ComplexInput), cudaMemcpyHostToDevice, streams[0]);
-  // cudaEventRecord(copyCompletion[0], streams[0]); // record the completion of the h2d transfer
+// MWA mods: Assumes input data already written to array_d[0] and optionally array_d[1]
+//           before xgpuCudaXengine() call
+//           Hence the transfer of input data can be skipped.  PIPE_LENGTH must be 1 or 2
+//           so ALL data goes into array_d[0]/[1] and ONLY written to them ONCE
+///////////////////////////////////////////////////////////////////////////////////////////
+
+  // MWA change: CUBE_ASYNC_COPY_CALL(array_d[0], array_hp, vecLengthPipe*sizeof(ComplexInput), cudaMemcpyHostToDevice, streams[0]);
+  // MWA change: cudaEventRecord(copyCompletion[0], streams[0]); // record the completion of the h2d transfer
   checkCudaError();
 
   CUBE_ASYNC_START(PIPELINE_LOOP);
@@ -625,15 +632,15 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
 #endif
 #endif
     cudaStreamWaitEvent(streams[1], copyCompletion[(p+1)%2], 0); // only start the kernel once the h2d transfer is complete
-    CUBE_ASYNC_KERNEL_CALL(shared2x2, dimGrid, dimBlock, 0, streams[1], 
+    CUBE_ASYNC_KERNEL_CALL(shared2x2, dimGrid, dimBlock, 0, streams[1],
 			   matrix_real_d, matrix_imag_d, NSTATION, writeMatrix);
     cudaEventRecord(kernelCompletion[(p+1)%2], streams[1]); // record the completion of the kernel
     checkCudaError();
 
     // Download next chunk of input data
     cudaStreamWaitEvent(streams[0], kernelCompletion[p%2], 0); // only start the transfer once the kernel has completed
-    CUBE_ASYNC_COPY_CALL(array_load, array_hp+p*vecLengthPipe, vecLengthPipe*sizeof(ComplexInput), cudaMemcpyHostToDevice, streams[0]);
-    cudaEventRecord(copyCompletion[p%2], streams[0]); // record the completion of the h2d transfer
+    // MWA change: CUBE_ASYNC_COPY_CALL(array_load, array_hp+p*vecLengthPipe, vecLengthPipe*sizeof(ComplexInput), cudaMemcpyHostToDevice, streams[0]);
+    // MWA change: cudaEventRecord(copyCompletion[p%2], streams[0]); // record the completion of the h2d transfer
     checkCudaError();
   }
 
