@@ -241,15 +241,18 @@ int xgpuInit(XGPUContext *context, int device_flags)
 	  xgpuSetHostOutputBuffer(context);
   }
 
-  ///////////////////////////////////////////////////////////////////////////////////////////
-  // MWA mods: Swap allocation of array_d[0] and array_d[1] so that they are contiguous in
-  //           memory when allocating from high to low addresses.
-  //           Not absolutely guaranteed to be contiguous, so check before using.
-  ///////////////////////////////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////////////////////////////////
+  // MWA mods: allocate all of array_d at once to ensure array_d[0] and array_d[1] are contiguous
+  ///////////////////////////////////////////////////////////////////////////////////////////////
 
   //allocate memory on device
-  cudaMalloc((void **) &(internal->array_d[1]), vecLengthPipe*sizeof(ComplexInput));
-  cudaMalloc((void **) &(internal->array_d[0]), vecLengthPipe*sizeof(ComplexInput));
+  // MWA mod: change allocation of array_d[0] to double size and drop allocation of array_d[1]
+  //cudaMalloc((void **) &(internal->array_d[0]), vecLengthPipe*sizeof(ComplexInput));
+  //cudaMalloc((void **) &(internal->array_d[1]), vecLengthPipe*sizeof(ComplexInput));
+  cudaMalloc((void **) &(internal->array_d[0]), 2*vecLengthPipe*sizeof(ComplexInput));
+  // MWA mod: set array_d[1] pointer to half way through (it's a pointer to type ComplexInput)
+  internal->array_d[1] = internal->array_d[0] + vecLengthPipe;
+	
   cudaMalloc((void **) &(internal->matrix_d), matLength*sizeof(Complex));
   checkCudaError();
 
