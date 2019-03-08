@@ -538,7 +538,8 @@ void xgpuFree(XGPUContext *context)
       context->matrix_h = NULL;
     }
 
-    cudaFree(internal->array_d[1]);
+    // MWA mod: remove superfluous cudaFree()
+    //cudaFree(internal->array_d[1]);
     cudaFree(internal->array_d[0]);
     cudaFree(internal->matrix_d);
 
