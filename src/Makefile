@@ -109,9 +109,9 @@ NVCCFLAGS += -DCOMPLEX_BLOCK_SIZE=$(COMPLEX_BLOCK_SIZE)
 endif
 
 ################################
-# MWAX- override the library name to based on the NSTATION parameter
+# MWAX- override the library name 
 ################################
-LIBXGPU = libxgpumwax$(NSTATION).so
+LIBXGPU = libxgpumwax.so
 
 ################################
 # Benchmarking variable handlers
@@ -177,10 +177,10 @@ DEPS = $(BINXGPU_OBJS:.o=.d) $(LIBXGPU_OBJS:.o=.d)
 all: cuda_correlator xgpuinfo $(LIBXGPU)
 
 cuda_correlator: $(CUDA_CORRELATOR_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION) -lrt
+	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax -lrt
 
 xgpuinfo: $(XGPUINFO_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)
+	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax
 
 $(LIBXGPU): $(LIBXGPU_OBJS)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@ $(LFLAGS) --shared
