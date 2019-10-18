@@ -46,6 +46,9 @@ RPATH = -Xlinker -rpath,'$${ORIGIN}:$${ORIGIN}/../lib'
 LIBXGPU = libxgpu.so
 endif
 
+# MWAX- override the library name to based on the NSTATION parameter
+LIBXGPU = libxgpumwax$(NSTATION).so
+
 NVCCFLAGS += $(DEBUG) -arch=$(CUDA_ARCH) --ptxas-options=-v -prec-sqrt=false -Xcompiler -fPIC
 NVCCFLAGS += -DTEXTURE_DIM=$(TEXTURE_DIM)
 
@@ -172,10 +175,10 @@ DEPS = $(BINXGPU_OBJS:.o=.d) $(LIBXGPU_OBJS:.o=.d)
 all: cuda_correlator xgpuinfo $(LIBXGPU)
 
 cuda_correlator: $(CUDA_CORRELATOR_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpu -lrt
+	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION) -lrt
 
 xgpuinfo: $(XGPUINFO_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpu
+	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)
 
 $(LIBXGPU): $(LIBXGPU_OBJS)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@ $(LFLAGS) --shared
@@ -240,7 +243,7 @@ show:
 	@echo COMPLEX_BLOCK_SIZE=$(COMPLEX_BLOCK_SIZE)
 
 clean:
-	rm -f cuda_correlator libxgpu.so xgpuinfo
+	rm -f cuda_correlator $(LIBXGPU) xgpuinfo
 	rm -f $(BINXGPU_OBJS) $(LIBXGPU_OBJS) cube/cube.o
 	rm -f $(DEPS)
 	rm -f tags
