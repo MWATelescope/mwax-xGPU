@@ -46,9 +46,6 @@ RPATH = -Xlinker -rpath,'$${ORIGIN}:$${ORIGIN}/../lib'
 LIBXGPU = libxgpu.so
 endif
 
-# MWAX- override the library name to based on the NSTATION parameter
-LIBXGPU = libxgpumwax$(NSTATION).so
-
 NVCCFLAGS += $(DEBUG) -arch=$(CUDA_ARCH) --ptxas-options=-v -prec-sqrt=false -Xcompiler -fPIC
 NVCCFLAGS += -DTEXTURE_DIM=$(TEXTURE_DIM)
 
@@ -110,6 +107,11 @@ endif
 ifdef COMPLEX_BLOCK_SIZE
 NVCCFLAGS += -DCOMPLEX_BLOCK_SIZE=$(COMPLEX_BLOCK_SIZE)
 endif
+
+################################
+# MWAX- override the library name to based on the NSTATION parameter
+################################
+LIBXGPU = libxgpumwax$(NSTATION).so
 
 ################################
 # Benchmarking variable handlers
