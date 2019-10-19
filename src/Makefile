@@ -111,7 +111,7 @@ endif
 ################################
 # MWAX- override the library name 
 ################################
-LIBXGPU = libxgpumwax$(NSTATION).so
+LIBXGPU = libxgpumwax$(NSTATION)t.so
 
 $(info LIBXGPU is $(LIBXGPU))
 
@@ -179,10 +179,10 @@ DEPS = $(BINXGPU_OBJS:.o=.d) $(LIBXGPU_OBJS:.o=.d)
 all: cuda_correlator xgpuinfo $(LIBXGPU)
 
 cuda_correlator: $(CUDA_CORRELATOR_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION) -lrt
+	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)t -lrt
 
 xgpuinfo: $(XGPUINFO_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)
+	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)t
 
 $(LIBXGPU): $(LIBXGPU_OBJS)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@ $(LFLAGS) --shared
@@ -218,8 +218,8 @@ objs: $(BINXGPU_OBJS) $(LIBXGPU_OBJS)
 
 install: cuda_correlator xgpuinfo $(LIBXGPU)
 	mkdir -p $(bindir)
-	cp cuda_correlator $(bindir)
-	cp xgpuinfo $(bindir)
+	cp cuda_correlator $(bindir)/cuda_correlator_mwax$(NSTATION)t
+	cp xgpuinfo $(bindir)/xgpuinfo_mwax$(NSTATION)t
 	mkdir -p $(includedir)
 	cp xgpu.h $(includedir)
 	mkdir -p $(libdir)
@@ -228,8 +228,8 @@ install: cuda_correlator xgpuinfo $(LIBXGPU)
 	cp xgpu.m4 $(aclocaldir)
 
 uninstall:
-	rm -f $(bindir)/cuda_correlator
-	rm -f $(bindir)/xgpuinfo
+	rm -f $(bindir)/cuda_correlator_mwax$(NSTATION)t
+	rm -f $(bindir)/xgpuinfo_mwax$(NSTATION)t
 	rm -f $(includedir)/xgpu.h
 	rm -f $(libdir)/$(LIBXGPU)
 	rm -f $(aclocaldir)/xgpu.m4
