@@ -111,7 +111,7 @@ endif
 ################################
 # MWAX- override the library name 
 ################################
-LIBXGPU = libxgpumwax$(NSTATION)t.so
+LIBXGPU = libxgpumwax$(NSTATION)t_$(NFREQUENCY).so
 
 $(info LIBXGPU is $(LIBXGPU))
 
