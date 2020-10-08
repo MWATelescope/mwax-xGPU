@@ -179,10 +179,10 @@ DEPS = $(BINXGPU_OBJS:.o=.d) $(LIBXGPU_OBJS:.o=.d)
 all: cuda_correlator xgpuinfo $(LIBXGPU)
 
 cuda_correlator: $(CUDA_CORRELATOR_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)t -lrt
+	$(NVCC) $(NVCCFLAGS) $(CUDA_CORRELATOR_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)t_$(NFREQUENCY) -lrt
 
 xgpuinfo: $(XGPUINFO_OBJS) $(LIBXGPU)
-	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)t
+	$(NVCC) $(NVCCFLAGS) $(XGPUINFO_OBJS) -o $@ $(LFLAGS) $(RPATH) -lxgpumwax$(NSTATION)t_$(NFREQUENCY)
 
 $(LIBXGPU): $(LIBXGPU_OBJS)
 	$(NVCC) $(NVCCFLAGS) $^ -o $@ $(LFLAGS) --shared
