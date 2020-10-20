@@ -68,6 +68,8 @@ $(shell $(SHELL) gen_xgpu_version.sh)
 
 ##########################
 # Sizing variable handlers
+#
+# MWAX- need to update xgpu_info.h based on params
 ##########################
 
 ifdef NPOL
@@ -76,27 +78,33 @@ endif
 
 ifdef NSTATION
 NVCCFLAGS += -DNSTATION=$(NSTATION)
+$(shell sed -i "s/#define NSTATION 128/#define NSTATION $(NSTATION)/g" xgpu_info.h)
 else
 # Handle common typo
 ifdef NSTATIONS
 NVCCFLAGS += -DNSTATION=$(NSTATIONS)
+$(shell sed -i "s/#define NSTATION 128/#define NSTATION $(NSTATIONS)/g" xgpu_info.h)
 endif
 endif
 
 ifdef NFREQUENCY
 NVCCFLAGS += -DNFREQUENCY=$(NFREQUENCY)
+$(shell sed -i "s/#define NFREQUENCY 5120/#define NFREQUENCY $(NFREQUENCY)/g" xgpu_info.h)
 endif
 
 ifdef NTIME
 NVCCFLAGS += -DNTIME=$(NTIME)
+$(shell sed -i "s/#define NTIME 52/#define NTIME $(NTIME)/g" xgpu_info.h)
 endif
 
 ifdef NTIME_PIPE
 NVCCFLAGS += -DNTIME_PIPE=$(NTIME_PIPE)
+$(shell sed -i "s/#define NTIME_PIPE 52/#define NTIME_PIPE $(NTIME_PIPE)/g" xgpu_info.h)
 else
 # Handle common typo
 ifdef NTIMEPIPE
 NVCCFLAGS += -DNTIME_PIPE=$(NTIMEPIPE)
+$(shell sed -i "s/#define NTIME_PIPE 52/#define NTIME_PIPE $(NTIMEPIPE)/g" xgpu_info.h)
 endif
 endif
 
