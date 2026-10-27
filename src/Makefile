@@ -11,7 +11,8 @@ endif
 
 DEBUG ?= -O3
 TEXTURE_DIM ?= 1
-CUDA_ARCH ?= sm_37
+# sm_86 is the NVIDIA A40. CUDA 13 supports Turing (sm_75) and newer only.
+CUDA_ARCH ?= sm_86
 
 NVCC = $(CUDA_DIR)/bin/nvcc
 prefix ?= /usr/local
@@ -48,18 +49,6 @@ endif
 
 NVCCFLAGS += $(DEBUG) -arch=$(CUDA_ARCH) --ptxas-options=-v -prec-sqrt=false -Xcompiler -fPIC
 NVCCFLAGS += -DTEXTURE_DIM=$(TEXTURE_DIM)
-
-ifeq ($(strip $(CUDA_ARCH)),sm_35)
-NVCCFLAGS += -maxrregcount=72
-endif
-
-ifeq ($(strip $(CUDA_ARCH)),sm_50)
-NVCCFLAGS += -maxrregcount=72
-endif
-
-ifeq ($(strip $(CUDA_ARCH)),sm_52)
-NVCCFLAGS += -maxrregcount=72
-endif
 
 #NVCCFLAGS += -Xptxas -dlcm=cg # disable L1 cache
 

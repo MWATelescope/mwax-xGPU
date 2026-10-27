@@ -22,7 +22,11 @@ dp4a.
 
 Software Compatibility:
 
-The library has been tested under Linux (Ubuntu 16.04 and CentOS 7)
+MWA fork: the library builds with CUDA 13.4 and with the default gcc of
+Ubuntu 24.04. It reads its input through texture objects (CUDA 12.0 removed
+texture references), so it also still builds with CUDA 11.8.
+
+The upstream library has been tested under Linux (Ubuntu 16.04 and CentOS 7)
 using release 9.2 of the CUDA toolkit.  However the expectation is
 that all versions of CUDA should be compatible.
 
@@ -48,12 +52,15 @@ and running "make".
   $ cd src
   $ make
 
-The default architecture that is targeted is Kepler (sm_35), though
-this can be overriden with the CUDA_ARCH variable.  E.g.,
+The default architecture that is targeted is Ampere GA102 (sm_86, the
+NVIDIA A40), though this can be overriden with the CUDA_ARCH variable.
+E.g.,
 
-  $ make CUDA_ARCH=sm_60
+  $ make CUDA_ARCH=sm_75
 
-would build xGPU for Pascal GP100.  The possible options are
+would build xGPU for Turing.  CUDA 13 supports Turing (sm_75) and newer
+only.  Maxwell, Pascal and Volta need a CUDA 12.x toolkit, and Kepler needs
+CUDA 11.x.  The table below is for older toolkits and is kept for reference.
 
 arch    example chips               example products                    dp4a
 sm_20   GF100, GF110                Tesla 2050, Tesla 2070
@@ -68,6 +75,8 @@ sm_61   GP102, GP104, GP106, GP107  Tesla P40, Tesla P4, GTX 1080       x
 sm_62   GP10B                       Jetson TX2
 sm_70   GV100                       Tesla V100, Titan V                 x
 sm_72   GV10B                       Xavier                              x
+sm_75   TU102, TU104                Tesla T4                            x
+sm_86   GA102                       NVIDIA A40                          x
 
 In general one should target the same architecture that they are
 running on.  While code compiled for an older architecture will in

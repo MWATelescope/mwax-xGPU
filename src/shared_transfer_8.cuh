@@ -7,7 +7,7 @@
 #if TEXTURE_DIM == 1
 // Read in column in first warp as float2, row in second warp (still true for 1D?)
 #define LOAD(s, t)							\
-  {float2 temp = tex1Dfetch(tex1dfloat2, array_index + (t)*NFREQUENCY*Nstation*NPOL); \
+  {float2 temp = tex1Dfetch<float2>(tex_obj, array_index + (t)*NFREQUENCY*Nstation*NPOL); \
     CUBE_ADD_BYTES(sizeof(ComplexInput));				\
     *(input##s##_p) = temp; }
 
@@ -20,8 +20,8 @@
 // to shared memory avoid bank conflict.
 #define LOAD(s, t)							\
   { float4 temp;							\
-    asm("tex.2d.v4.f32.s32 {%0, %1, %2, %3}, [tex2dfloat2, {%4, %5}];" : \
-	"=f"(temp.x), "=f"(temp.y), "=f"(temp.z), "=f"(temp.w) : "r"(array_index), "r"(t)); \
+    asm("tex.2d.v4.f32.s32 {%0, %1, %2, %3}, [%4, {%5, %6}];" : \
+	"=f"(temp.x), "=f"(temp.y), "=f"(temp.z), "=f"(temp.w) : "l"(tex_obj), "r"(array_index), "r"(t)); \
     CUBE_ADD_BYTES(sizeof(ComplexInput));				\
     *(input##s##_p) = make_float2(temp.x, temp.y); }
 
@@ -29,7 +29,7 @@
 
 // Read in column in first warp as float2, row in second warp
 #define LOAD(s, t)							\
-  {float2 temp = tex2D(tex2dfloat2, array_index, t);			\
+  {float2 temp = tex2D<float2>(tex_obj, array_index, t);			\
     CUBE_ADD_BYTES(sizeof(ComplexInput));				\
     *(input##s##_p) = temp; }
 

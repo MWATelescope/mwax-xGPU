@@ -31,15 +31,20 @@ Integer-valued inputs give exact float sums, so the output hash of these cases m
 Stop the correlator first. The tests use the GPU.
 
 ```
-# Before (CUDA 11.8, master)
+# Before (CUDA 11.8, master). CUDA 11.8 needs gcc-11 on Ubuntu 24.04.
 ./run_golden.sh -r https://github.com/MWATelescope/mwax-xGPU.git -b master \
     -c /usr/local/cuda-11.8 -g gcc-11 -a sm_86 -d 0 -t "<tiles list>" -o ~/golden/before
 
-# After (new CUDA, new branch)
+# After, step 1: the port on the SAME toolkit (CUDA 11.8). This isolates the port.
 ./run_golden.sh -r https://github.com/MWATelescope/mwax-xGPU.git -b cuda_13_update \
-    -c /usr/local/cuda-13.4 -g gcc-11 -a sm_86 -d 0 -t "<tiles list>" -o ~/golden/after
+    -c /usr/local/cuda-11.8 -g gcc-11 -a sm_86 -d 0 -t "<tiles list>" -o ~/golden/after_118
 
-./compare_golden.py ~/golden/before ~/golden/after
+# After, step 2: the port on CUDA 13.4. Do NOT use -g: CUDA 13 works with the default gcc.
+./run_golden.sh -r https://github.com/MWATelescope/mwax-xGPU.git -b cuda_13_update \
+    -c /usr/local/cuda-13.4 -a sm_86 -d 0 -t "<tiles list>" -o ~/golden/after_134
+
+./compare_golden.py ~/golden/before ~/golden/after_118
+./compare_golden.py ~/golden/before ~/golden/after_134
 ```
 
 Include at least one tiles value above 192. Those builds use two pipeline stages (`array_d[1]`).

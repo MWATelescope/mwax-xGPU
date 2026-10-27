@@ -235,7 +235,7 @@ CUBE_DEVICE(static void, write2x2, unsigned int &Col, unsigned int &Row, int4 *m
 
 #ifndef DP4A
 
-CUBE_KERNEL(static shared2x2, float4 *matrix_real, float4 *matrix_imag, const int Nstation, const int write)
+CUBE_KERNEL(static shared2x2, float4 *matrix_real, float4 *matrix_imag, const int Nstation, const int write, cudaTextureObject_t tex_obj)
 {
   CUBE_START;
 
@@ -424,7 +424,7 @@ CUBE_KERNEL(static shared2x2, float4 *matrix_real, float4 *matrix_imag, const in
 
 #else // doing DP4A computation
 
-CUBE_KERNEL(static shared2x2, int4 *matrix_real, int4 *matrix_imag, const int Nstation, const int write)
+CUBE_KERNEL(static shared2x2, int4 *matrix_real, int4 *matrix_imag, const int Nstation, const int write, cudaTextureObject_t tex_obj)
 {
   CUBE_START;
 

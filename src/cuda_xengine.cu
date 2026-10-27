@@ -27,6 +27,10 @@ static int writeMatrix = 1;
 // System page size (used for rounding size passed to cudaHostRegister)
 static long page_size = sysconf(_SC_PAGE_SIZE);
 
+// Number of device input buffers: array_d[0] and array_d[1]. Each has its own
+// texture object.
+#define NUM_INPUT_BUFFERS 2
+
 typedef struct XGPUInternalContextStruct {
   // Which device this context applies to
   int device;
@@ -62,6 +66,13 @@ typedef struct XGPUInternalContextStruct {
   // Whether xgpuSetHostOutputBuffer has been called
   bool matrix_h_set;
   bool register_host_matrix;
+
+  // MWA: texture objects that read array_d[0] and array_d[1]. They replace the
+  // texture references that CUDA 12.0 removed. These members MUST stay at the
+  // end of the struct: mwax_db2correlate2db reads device, array_d and
+  // matrix_d through its own copy of the leading members, so they must not
+  // move.
+  cudaTextureObject_t tex_obj[NUM_INPUT_BUFFERS];
 } XGPUInternalContext;
 
 #define TILE_HEIGHT 8
@@ -69,22 +80,6 @@ typedef struct XGPUInternalContextStruct {
 #define NPOL 2
 
 #define REG_TILE_NBASELINE ((NSTATION/2+1)*(NSTATION/4))
-
-#ifndef FIXED_POINT
-// texture declaration for FP32 reads
-static texture<float2, 1, cudaReadModeElementType> tex1dfloat2;
-static texture<float2, 2, cudaReadModeElementType> tex2dfloat2;
-#else
-#ifdef DP4A
-// texture declaration for swizzled 8-bit fixed point reads
-static texture<int2, 1, cudaReadModeElementType> tex1dchar4;
-static texture<int2, 2, cudaReadModeElementType> tex2dchar4;
-#else
-// texture declaration for 8-bit fixed point reads
-static texture<char2, 1, cudaReadModeNormalizedFloat> tex1dfloat2;
-static texture<char2, 2, cudaReadModeNormalizedFloat> tex2dfloat2;
-#endif
-#endif
 
 // array holding indices for which matrix we are doing the output to at a given iteration
 #if (NPULSAR > 0)
@@ -307,6 +302,14 @@ int xgpuInit(XGPUContext *context, int device_flags)
 #endif
 
   // check whether texture dimensions are ok
+#if TEXTURE_DIM == 1
+  // deviceProp.maxTexture1DLinear was removed in CUDA 13.0
+  size_t maxTexture1DLinear = 0;
+  if (cudaDeviceGetTexture1DLinearMaxWidth(&maxTexture1DLinear, &(internal->channelDesc), internal->device) != cudaSuccess) {
+    checkCudaError();
+    return XGPU_CUDA_ERROR;
+  }
+#endif
 #if TEXTURE_DIM == 2
 #ifdef DP4A
   if((NFREQUENCY * NSTATION * NPOL > deviceProp.maxTexture2DLinear[0]) ||
@@ -326,15 +329,68 @@ int xgpuInit(XGPUContext *context, int device_flags)
   // bytes of 1D texture without any problems.  Perhaps the value of
   // maxTexture1D returned by cudaGetDeviceProperties is wrong?
 #ifdef DP4A
-  if (NFREQUENCY * NSTATION * NPOL * (NTIME_PIPE/4) > deviceProp.maxTexture1DLinear) {
+  if ((size_t)NFREQUENCY * NSTATION * NPOL * (NTIME_PIPE/4) > maxTexture1DLinear) {
     return XGPU_INSUFFICIENT_TEXTURE_MEMORY;
   }
 #else
-  if (NFREQUENCY * NSTATION * NPOL * NTIME_PIPE > deviceProp.maxTexture1DLinear) {
+  if ((size_t)NFREQUENCY * NSTATION * NPOL * NTIME_PIPE > maxTexture1DLinear) {
     return XGPU_INSUFFICIENT_TEXTURE_MEMORY;
   }
 #endif
 #endif
+
+  // Create one texture object per device input buffer. They are created once
+  // here and used by every xgpuCudaXengine() call: array_d[0] and array_d[1]
+  // never move.
+  for (int i=0; i<NUM_INPUT_BUFFERS; i++) {
+    cudaResourceDesc resDesc;
+    memset(&resDesc, 0, sizeof(resDesc));
+#if TEXTURE_DIM == 2
+    resDesc.resType = cudaResourceTypePitch2D;
+    resDesc.res.pitch2D.devPtr = internal->array_d[i];
+    resDesc.res.pitch2D.desc = internal->channelDesc;
+    resDesc.res.pitch2D.width = NFREQUENCY*NSTATION*NPOL;
+#ifndef DP4A
+    resDesc.res.pitch2D.height = NTIME_PIPE;
+    resDesc.res.pitch2D.pitchInBytes = NFREQUENCY*NSTATION*NPOL*sizeof(ComplexInput);
+#else
+    resDesc.res.pitch2D.height = NTIME_PIPE/4;
+    resDesc.res.pitch2D.pitchInBytes = NFREQUENCY*NSTATION*NPOL*2*sizeof(char4);
+#endif
+#else
+    resDesc.resType = cudaResourceTypeLinear;
+    resDesc.res.linear.devPtr = internal->array_d[i];
+    resDesc.res.linear.desc = internal->channelDesc;
+#ifndef DP4A
+    resDesc.res.linear.sizeInBytes = (size_t)NFREQUENCY*NSTATION*NPOL*NTIME_PIPE*sizeof(ComplexInput);
+#else
+    resDesc.res.linear.sizeInBytes = (size_t)NFREQUENCY*NSTATION*NPOL*(NTIME_PIPE/4)*sizeof(int2);
+#endif
+#endif
+
+    // Same settings as the texture references this replaces: unnormalised
+    // coordinates, point sampling, clamped addressing.
+    cudaTextureDesc texDesc;
+    memset(&texDesc, 0, sizeof(texDesc));
+    texDesc.addressMode[0] = cudaAddressModeClamp;
+    texDesc.addressMode[1] = cudaAddressModeClamp;
+    texDesc.filterMode = cudaFilterModePoint;
+#if defined(FIXED_POINT) && !defined(DP4A)
+    texDesc.readMode = cudaReadModeNormalizedFloat;
+#else
+    texDesc.readMode = cudaReadModeElementType;
+#endif
+    texDesc.normalizedCoords = 0;
+
+    cudaError_t texError = cudaCreateTextureObject(&(internal->tex_obj[i]), &resDesc, &texDesc, NULL);
+    if (texError != cudaSuccess) {
+      fprintf(stderr, "(CUDA) cudaCreateTextureObject %d: %s (" __FILE__ ":%d)\n", i, cudaGetErrorString(texError), __LINE__);
+      if (i > 0) {
+        cudaDestroyTextureObject(internal->tex_obj[0]);
+      }
+      return XGPU_CUDA_ERROR;
+    }
+  }
 
   return XGPU_OK;
 }
@@ -515,6 +571,10 @@ void xgpuFree(XGPUContext *context)
     //assign the device
     cudaSetDevice(internal->device);
 
+    for(int i=0; i<NUM_INPUT_BUFFERS; i++) {
+      cudaDestroyTextureObject(internal->tex_obj[i]);
+    }
+
     for(int i=0; i<2; i++) {
       cudaStreamDestroy(internal->streams[i]);
       cudaEventDestroy(internal->copyCompletion[i]);
@@ -569,7 +629,6 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
   cudaStream_t *streams = internal->streams;
   cudaEvent_t *copyCompletion = internal->copyCompletion;
   cudaEvent_t *kernelCompletion = internal->kernelCompletion;
-  cudaChannelFormatDesc channelDesc = internal->channelDesc;
 
   // set pointers to the real and imaginary components of the device matrix
 #ifndef DP4A
@@ -582,7 +641,7 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
 
   int Nblock = compiletime_info.nstation/min(TILE_HEIGHT,TILE_WIDTH);
   ComplexInput *array_load;
-  ComplexInput *array_compute;
+  cudaTextureObject_t tex_compute;
 
   dim3 dimBlock(TILE_WIDTH,TILE_HEIGHT,1);
   //allocated exactly as many thread blocks as are needed
@@ -616,28 +675,13 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
   for (int q=0; ; q++)
 #endif
   for (int p=1; p<PIPE_LENGTH; p++) {
-    array_compute = array_d[(p+1)%2];
+    tex_compute = internal->tex_obj[(p+1)%2];
     array_load = array_d[p%2];
 
     // Kernel Calculation
-#if TEXTURE_DIM == 2
-#ifndef DP4A
-    cudaBindTexture2D(0, tex2dfloat2, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL, NTIME_PIPE,
-		      NFREQUENCY*NSTATION*NPOL*sizeof(ComplexInput));
-#else
-    cudaBindTexture2D(0, tex2dchar4, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL, NTIME_PIPE/4,
-		      NFREQUENCY*NSTATION*NPOL*2*sizeof(char4));
-#endif
-#else
-#ifndef DP4A
-    cudaBindTexture(0, tex1dfloat2, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL*NTIME_PIPE*sizeof(ComplexInput));
-#else
-    cudaBindTexture(0, tex1dchar4, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL*(NTIME_PIPE/4)*sizeof(int2));
-#endif
-#endif
     cudaStreamWaitEvent(streams[1], copyCompletion[(p+1)%2], 0); // only start the kernel once the h2d transfer is complete
     CUBE_ASYNC_KERNEL_CALL(shared2x2, dimGrid, dimBlock, 0, streams[1],
-			   matrix_real_d, matrix_imag_d, NSTATION, writeMatrix);
+			   matrix_real_d, matrix_imag_d, NSTATION, writeMatrix, tex_compute);
     cudaEventRecord(kernelCompletion[(p+1)%2], streams[1]); // record the completion of the kernel
     checkCudaError();
 
@@ -650,26 +694,11 @@ int xgpuCudaXengine(XGPUContext *context, int syncOp)
 
   CUBE_ASYNC_END(PIPELINE_LOOP);
 
-  array_compute = array_d[(PIPE_LENGTH+1)%2];
+  tex_compute = internal->tex_obj[(PIPE_LENGTH+1)%2];
   // Final kernel calculation
-#if TEXTURE_DIM == 2
-#ifndef DP4A
-    cudaBindTexture2D(0, tex2dfloat2, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL, NTIME_PIPE,
-		      NFREQUENCY*NSTATION*NPOL*sizeof(ComplexInput));
-#else
-    cudaBindTexture2D(0, tex2dchar4, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL, NTIME_PIPE/4,
-		      NFREQUENCY*NSTATION*NPOL*2*sizeof(char4));
-#endif
-#else
-#ifndef DP4A
-    cudaBindTexture(0, tex1dfloat2, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL*NTIME_PIPE*sizeof(ComplexInput));
-#else
-    cudaBindTexture(0, tex1dchar4, array_compute, channelDesc, NFREQUENCY*NSTATION*NPOL*(NTIME_PIPE/4)*sizeof(int2));
-#endif
-#endif
   cudaStreamWaitEvent(streams[1], copyCompletion[(PIPE_LENGTH+1)%2], 0);
   CUBE_ASYNC_KERNEL_CALL(shared2x2, dimGrid, dimBlock, 0, streams[1], matrix_real_d, matrix_imag_d,
-			 NSTATION, writeMatrix);
+			 NSTATION, writeMatrix, tex_compute);
 
   if(syncOp == SYNCOP_DUMP) {
     checkCudaError();

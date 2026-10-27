@@ -8,7 +8,7 @@
 #
 # Example:
 #   ./run_golden.sh -r https://github.com/MWATelescope/mwax-xGPU.git -b master \
-#       -c /usr/local/cuda -g gcc-11 -a sm_86 -d 0 -t "32 64 128 256" -o ~/golden/before
+#       -c /usr/local/cuda-11.8 -g gcc-11 -a sm_86 -d 0 -t "128 256" -o ~/golden/before
 #
 set -euo pipefail
 
@@ -27,11 +27,12 @@ readonly HARNESS_BIN="xgpu_golden"
 
 usage() {
     cat >&2 <<EOF
-Usage: $0 -r <repo> -b <branch|commit> -c <cuda_dir> -g <host_cc> -a <sm_arch> -d <gpu_device> -t "<tiles list>" -o <out_dir>
+Usage: $0 -r <repo> -b <branch|commit> -c <cuda_dir> [-g <host_cc>] -a <sm_arch> -d <gpu_device> -t "<tiles list>" -o <out_dir>
   -r  git repo URL or local path to build the library from
   -b  branch, tag or commit to build
   -c  CUDA toolkit directory (e.g. /usr/local/cuda)
-  -g  host compiler for nvcc -ccbin (e.g. gcc-11)
+  -g  host compiler for nvcc -ccbin (e.g. gcc-11). Optional: without it nvcc uses the
+      default gcc. CUDA 11.x needs gcc-11 on Ubuntu 24.04. CUDA 13.x must NOT use it.
   -a  GPU architecture (e.g. sm_86)
   -d  GPU device index
   -t  space-separated list of tiles values
@@ -54,7 +55,7 @@ while getopts "r:b:c:g:a:d:t:o:h" opt; do
         *) usage ;;
     esac
 done
-for v in repo ref cuda_dir host_cc arch device tiles_list out_dir; do
+for v in repo ref cuda_dir arch device tiles_list out_dir; do
     if [[ -z "${!v}" ]]; then
         echo "Missing argument: ${v}" >&2
         usage
@@ -65,7 +66,10 @@ if [[ -e "${out_dir}" ]]; then
     exit 1
 fi
 
-nvcc_cmd=("${cuda_dir}/bin/nvcc" -ccbin "${host_cc}")
+nvcc_cmd=("${cuda_dir}/bin/nvcc")
+if [[ -n "${host_cc}" ]]; then
+    nvcc_cmd+=(-ccbin "${host_cc}")
+fi
 readonly nvcc_cmd
 readonly LFLAGS="-L${cuda_dir}/lib64 -L. -lrt -lm"
 
@@ -80,9 +84,9 @@ trap 'rm -rf "${work_dir}"' EXIT
     echo "repo=${repo}"
     echo "ref=${ref}"
     echo "arch=${arch}"
-    echo "host_cc=${host_cc}"
+    echo "host_cc=${host_cc:-default}"
     echo "nvcc_version=$("${cuda_dir}/bin/nvcc" --version | tail -n 1)"
-    echo "host_cc_version=$("${host_cc}" --version | head -n 1)"
+    echo "host_cc_version=$("${host_cc:-gcc}" --version | head -n 1)"
     echo "driver=$(nvidia-smi --query-gpu=driver_version --format=csv,noheader -i "${device}")"
     echo "gpu=$(nvidia-smi --query-gpu=name --format=csv,noheader -i "${device}")"
 } > "${out_dir}/toolchain.txt"
