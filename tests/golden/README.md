@@ -19,8 +19,10 @@ new build, then compare.
 | `accumulate` | same input, 3 calls         | exact match with 3 x CPU                           |
 | `clear`      | same input after clear      | exact match with CPU, same hash as `int_small`     |
 | `int_large`  | integers -127..127          | exact match with CPU                               |
-| `float`      | uniform floats in [-1, 1)   | relative error vs CPU <= 1e-5                      |
+| `float`      | uniform floats in [-1, 1)   | error vs CPU <= 1e-5 of the largest output value   |
 | `timing`     | `float` input               | mean time per `xgpuCudaXengine()` call             |
+
+The tiles value must be a multiple of 16 (an xGPU requirement); the harness refuses other values.
 
 Integer-valued inputs give exact float sums, so the output hash of these cases must not change between builds.
 

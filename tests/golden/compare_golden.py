@@ -106,10 +106,10 @@ def compare_cases(before: dict[str, str], after: dict[str, str], report: Report)
     for case in TOLERANCE_CASES:
         key = f"case.{case}.hash"
         if before.get(key) != after.get(key):
-            rel_key = f"case.{case}.max_rel_err"
+            norm_key = f"case.{case}.max_norm_err"
             report.warnings.append(
-                f"{case}: output not bit-identical, max_rel_err vs CPU "
-                f"{before.get(rel_key)} -> {after.get(rel_key)} (within tolerance if status is PASS)"
+                f"{case}: output not bit-identical, max_norm_err vs CPU "
+                f"{before.get(norm_key)} -> {after.get(norm_key)} (within tolerance if status is PASS)"
             )
 
 

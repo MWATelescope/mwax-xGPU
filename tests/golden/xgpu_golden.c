@@ -47,8 +47,13 @@ typedef struct XGPUInternalPrefixStruct {
 // Number of xgpuCudaXengine() calls in the accumulation case.
 #define ACCUMULATE_CALLS 3
 
-// Maximum relative error for the non-integer float case (GPU vs CPU).
-#define FLOAT_REL_TOLERANCE 1.0e-5
+// Maximum error for the non-integer float case (GPU vs CPU), as a fraction of
+// the largest CPU output magnitude. A per-element relative error is not used:
+// elements near zero have a large relative error from float32 rounding alone.
+#define FLOAT_TOLERANCE 1.0e-5
+
+// xGPU requires NSTATION to be a multiple of this value.
+#define NSTATION_MULTIPLE 16
 
 // Number of calls for the timing case.
 #define TIMING_WARMUP_CALLS 3
@@ -187,38 +192,48 @@ static uint64_t record_hash(const char *name, const XGPUContext *ctx, const XGPU
   return h;
 }
 
-// Compare reordered GPU output with scale * CPU output. Exact when
-// tolerance < 0, else relative error per element.
+// Compare reordered GPU output with scale * CPU output. If tolerance < 0 the
+// match must be exact. Else the error of each element must be at most
+// tolerance times the largest magnitude in scale * CPU output.
 static int compare_cpu(const char *name, const Complex *gpu, const Complex *cpu, size_t n, float scale,
                        double tolerance) {
+  double max_mag = 0.0;
+  for (size_t i = 0; i < n; i++) {
+    double er = (double)scale * cpu[i].real;
+    double ei = (double)scale * cpu[i].imag;
+    double mag = sqrt(er * er + ei * ei);
+    if (mag > max_mag) {
+      max_mag = mag;
+    }
+  }
+
   size_t mismatches = 0;
   double max_abs = 0.0;
-  double max_rel = 0.0;
+  double max_norm = 0.0;
   for (size_t i = 0; i < n; i++) {
     double er = (double)scale * cpu[i].real;
     double ei = (double)scale * cpu[i].imag;
     double dr = (double)gpu[i].real - er;
     double di = (double)gpu[i].imag - ei;
     double abs_err = sqrt(dr * dr + di * di);
-    double mag = sqrt(er * er + ei * ei);
-    double rel_err = (mag == 0.0) ? abs_err : abs_err / mag;
+    double norm_err = (max_mag == 0.0) ? abs_err : abs_err / max_mag;
     if (abs_err > max_abs) {
       max_abs = abs_err;
     }
-    if (rel_err > max_rel) {
-      max_rel = rel_err;
+    if (norm_err > max_norm) {
+      max_norm = norm_err;
     }
     if (tolerance < 0.0) {
       if (gpu[i].real != (float)er || gpu[i].imag != (float)ei) {
         mismatches++;
       }
-    } else if (rel_err > tolerance) {
+    } else if (norm_err > tolerance) {
       mismatches++;
     }
   }
   fprintf(g_out, "case.%s.mismatches=%zu\n", name, mismatches);
   fprintf(g_out, "case.%s.max_abs_err=%.9g\n", name, max_abs);
-  fprintf(g_out, "case.%s.max_rel_err=%.9g\n", name, max_rel);
+  fprintf(g_out, "case.%s.max_norm_err=%.9g\n", name, max_norm);
   return mismatches == 0;
 }
 
@@ -311,6 +326,13 @@ int main(int argc, char **argv) {
   write_info(&info);
   fprintf(g_out, "run.seed=%llu\n", (unsigned long long)seed);
 
+  if (info.nstation % NSTATION_MULTIPLE != 0) {
+    fprintf(stderr, "NSTATION %u is not a multiple of %d: not a valid xGPU configuration\n", info.nstation,
+            NSTATION_MULTIPLE);
+    fclose(g_out);
+    return EXIT_FAILURE;
+  }
+
   if (info.ntime / info.ntimepipe > MAX_PIPE_LENGTH) {
     fprintf(stderr, "PIPE_LENGTH %u > %d is not supported by the MWA mods\n", info.ntime / info.ntimepipe,
             MAX_PIPE_LENGTH);
@@ -365,7 +387,7 @@ int main(int argc, char **argv) {
 
   // Case: non-integer floats, match within tolerance.
   fill_float(ctx.array_h, info.vecLength, &state);
-  ok = run_and_check("float", &ctx, &info, cpu, 1, 1, FLOAT_REL_TOLERANCE, &hash_other);
+  ok = run_and_check("float", &ctx, &info, cpu, 1, 1, FLOAT_TOLERANCE, &hash_other);
   record_status("float", ok);
 
   // Timing: kernel time per call, input already on the device.
