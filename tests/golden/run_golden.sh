@@ -123,7 +123,7 @@ for tiles in ${tiles_list}; do
     lib="libxgpumwax${tiles}t_${NFREQUENCY}.so"
     # shellcheck disable=SC2016  # $ORIGIN is for the linker, not the shell.
     if ! "${nvcc_cmd[@]}" -O2 -arch="${arch}" -I. -o "${HARNESS_BIN}" "${HARNESS_SRC}" \
-        -L. -l"xgpumwax${tiles}t_${NFREQUENCY}" -Xlinker -rpath,'$ORIGIN' \
+        -L. -l"xgpumwax${tiles}t_${NFREQUENCY}" -lm -lrt -Xlinker -rpath,'$ORIGIN' \
         >> "${cfg_out}/build.log" 2>&1; then
         echo "HARNESS BUILD FAILED: see ${cfg_out}/build.log"
         echo "build=FAIL" > "${cfg_out}/results.txt"
