@@ -30,9 +30,14 @@ INFO_PREFIX = "info."
 IGNORED_INFO_KEYS = ("info.version",)
 XGPUINFO_VERSION_PREFIX = "xGPU library version:"
 
-TIMING_KEY = "timing.mean_ms"
-# Warn if the mean kernel time is more than this fraction slower.
+# The minimum time per call is compared, not the mean: the minimum is the speed of the GPU when nothing else
+# disturbs it. The mean follows any other load or clock throttling during the run.
+TIMING_MIN_KEY = "timing.min_ms"
+TIMING_MAX_KEY = "timing.max_ms"
+# Warn if the minimum kernel time is more than this fraction slower.
 TIMING_WARN_FRACTION = 0.05
+# Warn if max/min of one run is more than this. The run was disturbed and its timing is not reliable.
+TIMING_NOISE_RATIO = 1.1
 
 EXIT_OK = 0
 EXIT_FAIL = 1
@@ -127,25 +132,50 @@ def compare_info(before: dict[str, str], after: dict[str, str], report: Report) 
             report.failures.append(f"{key}: {before.get(key)} -> {after.get(key)}")
 
 
+def timing_spread(results: dict[str, str]) -> float | None:
+    """Get the ratio of the slowest to the fastest call in one run.
+
+    Args:
+        results: Results of one run.
+
+    Returns:
+        The max/min ratio, or None if a value is missing or not positive.
+    """
+    if TIMING_MIN_KEY not in results or TIMING_MAX_KEY not in results:
+        return None
+    t_min = float(results[TIMING_MIN_KEY])
+    t_max = float(results[TIMING_MAX_KEY])
+    return t_max / t_min if t_min > 0 else None
+
+
 def compare_timing(before: dict[str, str], after: dict[str, str], report: Report) -> None:
-    """Compare the mean time per xgpuCudaXengine() call.
+    """Compare the minimum time per xgpuCudaXengine() call.
+
+    Also warn if the time of one call varied much within a run (max/min above TIMING_NOISE_RATIO). Then
+    the GPU was probably busy or throttled, and the run must be repeated on an idle GPU.
 
     Args:
         before: Results before the change.
         after: Results after the change.
         report: Report to add messages to.
     """
-    if TIMING_KEY not in before or TIMING_KEY not in after:
+    if TIMING_MIN_KEY not in before or TIMING_MIN_KEY not in after:
         report.warnings.append("timing: value missing, not compared")
         return
-    t_before = float(before[TIMING_KEY])
-    t_after = float(after[TIMING_KEY])
+    t_before = float(before[TIMING_MIN_KEY])
+    t_after = float(after[TIMING_MIN_KEY])
     change = (t_after - t_before) / t_before if t_before > 0 else 0.0
-    message = f"timing: mean {t_before:.4f} ms -> {t_after:.4f} ms ({change:+.1%})"
+    message = f"timing: min {t_before:.4f} ms -> {t_after:.4f} ms ({change:+.1%})"
     if change > TIMING_WARN_FRACTION:
-        report.warnings.append(message + " SLOWER")
-    else:
-        report.warnings.append(message)
+        message += " SLOWER"
+    report.warnings.append(message)
+
+    for label, results in (("before", before), ("after", after)):
+        spread = timing_spread(results)
+        if spread is not None and spread > TIMING_NOISE_RATIO:
+            report.warnings.append(
+                f"timing: NOISY {label} run (max/min = {spread:.2f}), timing not reliable, repeat on an idle GPU"
+            )
 
 
 def compare_xgpuinfo(before_dir: Path, after_dir: Path, report: Report) -> None:

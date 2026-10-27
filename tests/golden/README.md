@@ -20,7 +20,7 @@ new build, then compare.
 | `clear`      | same input after clear      | exact match with CPU, same hash as `int_small`     |
 | `int_large`  | integers -127..127          | exact match with CPU                               |
 | `float`      | uniform floats in [-1, 1)   | error vs CPU <= 1e-5 of the largest output value   |
-| `timing`     | `float` input               | mean time per `xgpuCudaXengine()` call             |
+| `timing`     | `float` input               | min time per `xgpuCudaXengine()` call; noise check |
 
 The tiles value must be a multiple of 16 (an xGPU requirement); the harness refuses other values.
 
