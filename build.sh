@@ -36,8 +36,8 @@ readonly LFLAGS="-L${cuda_dir}/lib64 -L. -lrt -lm"
 echo Cleaning up old build dir
 rm -rfv ${out_dir}
 mkdir ${out_dir}
-# 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256
-for tiles in 200; do
+
+for tiles in 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256; do
     # Undo any previous mods: the Makefile edits xgpu_info.h in place.
     /usr/bin/git restore "${src_dir}/xgpu_info.h"
 
