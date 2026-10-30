@@ -17,6 +17,7 @@ readonly NTIME_PIPE_OVER_SPLIT=28
 
 # Directories
 script_dir="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+src_dir="${script_dir}/src"
 readonly out_dir="${script_dir}/build"
 readonly cuda_dir="/usr/local/cuda"
 
@@ -35,10 +36,10 @@ readonly LFLAGS="-L${cuda_dir}/lib64 -L. -lrt -lm"
 echo Cleaning up old build dir
 rm -rfv ${out_dir}
 mkdir ${out_dir}
-
-for tiles in 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256; do
+# 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256
+for tiles in 200; do
     # Undo any previous mods: the Makefile edits xgpu_info.h in place.
-    /usr/bin/git restore "${script_dir}/src/xgpu_info.h"
+    /usr/bin/git restore "${src_dir}/xgpu_info.h"
 
     echo "=== ${tiles}T / ${NFREQUENCY} ==="
     if (( tiles <= TILES_SPLIT )); then
@@ -57,16 +58,19 @@ for tiles in 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256; do
         
     if ! { make clean NSTATION="${tiles}" \
         && make NVCC="${nvcc_cmd[*]}" LFLAGS="${LFLAGS}" CUDA_ARCH="${arch}" NSTATION="${tiles}" \
-            NFREQUENCY="${NFREQUENCY}" NTIME="${ntime}" NTIME_PIPE="${ntime_pipe}"; } \
+            NFREQUENCY="${NFREQUENCY}" NTIME="${ntime}" NTIME_PIPE="${ntime_pipe}" ; } \
         > "${cfg_out}/build.log" 2>&1; then
         echo "BUILD FAILED: see ${cfg_out}/build.log"
         echo "build=FAIL" > "${cfg_out}/results.txt"                
         continue
     else
-        lib="libxgpumwax${tiles}t_${NFREQUENCY}.so"
-        echo "Successfully built ${lib}"
         ./xgpuinfo > "${cfg_out}/xgpuinfo.txt"
         cat ${cfg_out}/xgpuinfo.txt
+        lib="libxgpumwax${tiles}t_${NFREQUENCY}.so"        
+        out_lib="${cfg_out}/${lib}"
+        mv "${src_dir}/${lib}" "${out_lib}"
+        cp "${src_dir}/xgpu_info.h" "${cfg_out}/xgpu_info.h"
+        echo "Successfully built ${out_lib}"                
     fi
 
     popd > /dev/null
