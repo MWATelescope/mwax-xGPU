@@ -31,9 +31,13 @@ fi
 readonly nvcc_cmd
 readonly LFLAGS="-L${cuda_dir}/lib64 -L. -lrt -lm"
 
-for tiles in "16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256" do
+echo Cleaning up old build dir
+rm -rfv ${out_dir}
+mkdir ${out_dir}
+
+for tiles in 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256; do
     # Undo any previous mods: the Makefile edits xgpu_info.h in place.
-    git restore .
+    /usr/bin/git restore .
 
     echo "=== ${tiles}T / ${NFREQUENCY} ==="
     if (( tiles <= TILES_SPLIT )); then
