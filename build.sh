@@ -51,15 +51,13 @@ for tiles in 16 32 48 64 80 96 112 128 144 160 184 200 208 224 240 256; do
     label="${tiles}t_${NFREQUENCY}"
     cfg_out="${out_dir}/${label}"    
     mkdir -p "${cfg_out}"
-    
-    pushd "src" > /dev/null
+        
     if ! { make clean NSTATION="${tiles}" \
         && make NVCC="${nvcc_cmd[*]}" LFLAGS="${LFLAGS}" CUDA_ARCH="${arch}" NSTATION="${tiles}" \
             NFREQUENCY="${NFREQUENCY}" NTIME="${ntime}" NTIME_PIPE="${ntime_pipe}"; } \
         > "${cfg_out}/build.log" 2>&1; then
         echo "BUILD FAILED: see ${cfg_out}/build.log"
-        echo "build=FAIL" > "${cfg_out}/results.txt"        
-        popd > /dev/null
+        echo "build=FAIL" > "${cfg_out}/results.txt"                
         continue
     fi
 
